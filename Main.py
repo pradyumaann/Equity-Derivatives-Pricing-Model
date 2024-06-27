@@ -26,14 +26,14 @@ class BlackScholes:
         return self.d1() - self.volatility * np.sqrt(self.maturity)
     
     def call_value(self) -> float:
-        call_payoff = self.spot * np.exp(-self.dividend * self.maturity) * norm.cdf(self.d1(), 0, 1) - \
+        call_value = self.spot * np.exp(-self.dividend * self.maturity) * norm.cdf(self.d1(), 0, 1) - \
             self.strike * np.exp(-self.risk_free_rate * self.maturity) * norm.cdf(self.d2(), 0, 1)
-        print(f'Call Value by Black-Scholes-Merton method is ${call_payoff}')
+        print(f'Call Value by Black-Scholes-Merton method is ${call_value}')
             
     def put_value(self) -> float:
-        put_payoff = self.strike * np.exp(-self.risk_free_rate * self.maturity) * norm.cdf(-self.d2(), 0, 1) - \
+        put_value = self.strike * np.exp(-self.risk_free_rate * self.maturity) * norm.cdf(-self.d2(), 0, 1) - \
             self.spot * np.exp(-self.dividend * self.maturity) * norm.cdf(-self.d1(), 0, 1)
-        print(f'Put Value by Black-Scholes-Merton method is ${put_payoff}')
+        print(f'Put Value by Black-Scholes-Merton method is ${put_value}')
 
 # Calculation of greeks    
     def delta_call(self) -> float:
@@ -62,6 +62,7 @@ class BlackScholes:
 # Monte Carlo simulation provides an easy way to deal with multiple random factors and the incorporation of more realistic asset price processes such as jumps in asset prices
 
 # Option pricing model - Monte Carlo method
+@dataclass
 class MonteCarlo:
     
     S: float = 5481                                                            #stock price
@@ -71,7 +72,8 @@ class MonteCarlo:
     N: float = 10                                                              #number of time steps
     M: float = 1000000                                                         #number of simulations
     market_value: float = 1181                                                 #market price of option
-    T = ((datetime.date(2024,11,29)-datetime.date.today()).days+1)/365         #time in years
+    T = ((datetime.date(2024,11,29)-datetime.date.today()).days+1)/365         #time till maturity
+    
     # To increase the accuracy of the model we can simply increase the number of Simulations
     # Risk Neutral pricing metodology tells us that: value of an option = risk-neutral expectation of its dicounted payoff,
     # we can estimate this expectation by computing the average of a large number of discounted payoff for a particular simulation
@@ -128,8 +130,7 @@ class MonteCarlo:
         SE = sigma/np.sqrt(self.M)
         print(f'Put Value by Monte-Carlo method is ${C0} with SE +/-{SE}')
         
-        
-        
+
 Monte_Carlo_test = MonteCarlo()
 print(Monte_Carlo_test.call_value())
 
