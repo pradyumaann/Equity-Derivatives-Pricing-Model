@@ -35,3 +35,25 @@ class BlackScholes:
             self.spot * np.exp(-self.dividend * self.maturity) * norm.cdf(-self.d1(), 0, 1)
         print(f'Put Value by Black-Scholes-Merton method is ${put_payoff}')
 
+# Calculation of greeks    
+    def delta_call(self) -> float:
+        return norm.cdf(self.d1(), 0, 1)
+    
+    def delta_put(self) -> float:
+        return -norm.cdf(-self.d1())
+    
+    def gamma(self) -> float:
+        return norm.pdf(self.d1()) / (self.spot * self.volatility * np.sqrt(self.maturity))
+    
+    def vega(self) -> float:
+        return self.spot * np.sqrt(self.maturity) * norm.pdf(self.d1()) * 0.01
+    
+    def rho_call(self) -> float:
+        return  - (self.spot * norm.pdf(self.d1()) * self.volatility / (2 * np.sqrt(self.maturity)) - self.risk_free_rate * self.strike * np.exp(-self.risk * self.maturity) * norm.cdf(self.d2())) / 100
+    
+    def rho_put(self) -> float:
+        return  - (self.spot * norm.pdf(self.d1()) * self.volatility / (2 * np.sqrt(self.maturity)) + self.risk_free_rate * self.strike * np.exp(-self.risk * self.maturity) * norm.cdf(self.d2())) / 100
+    
+    def theta_call(self) -> float:
+        return - (self.spot * norm.pdf(self.d1()) * self.volatility / (2* np.sqrt(self.maturity)) - self.risk_free_rate * self.strike * np.exp(-self.risk_free_rate * self.maturity) * norm.cdf(self.d2())) / 365
+    
