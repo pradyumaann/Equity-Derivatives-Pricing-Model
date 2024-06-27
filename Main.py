@@ -101,5 +101,37 @@ class MonteCarlo:
         sigma = np.sqrt((sum_CT2 - sum_CT*sum_CT/self.M)*np.exp(-2*self.r*self.T) / (self.M - 1))
         SE = sigma/np.sqrt(self.M)
         print(f'Call Value using Monte-Carlo method is ${C0} with SE +/-{SE}')
+                
+    def put_value(self) -> float:   
+        # Precompute the constants
+        dt = self.T/self.N
+        nudt = (self.r-0.5*self.vol**2) * dt
+        volsdt = self.vol * np.sqrt(dt)
+        lnS = np.log(self.S)
+    
+        # Standar Error placeholders
+        sum_PT = 0
+        sum_PT2 = 0
+    
+        for i in range(self.M):
+            lnSt = lnS
+            for j in range(self.N):
+                lnSt = lnSt + nudt + volsdt*np.random.normal()
+            
+            ST = np.exp(lnSt)
+            PT = max(0, self.K - ST)
+            sum_PT = sum_PT + PT
+            sum_PT2 = sum_PT2 + PT*PT
+            
+        C0 = np.exp(-self.r*self.T)*sum_PT/self.M
+        sigma = np.sqrt((sum_PT2 - sum_PT*sum_PT/self.M)*np.exp(-2*self.r*self.T) / (self.M - 1))
+        SE = sigma/np.sqrt(self.M)
+        print(f'Put Value by Monte-Carlo method is ${C0} with SE +/-{SE}')
         
         
+        
+Monte_Carlo_test = MonteCarlo()
+print(Monte_Carlo_test.call_value())
+
+Black_Scholes_test = BlackScholes()
+print(Black_Scholes_test.call_value())
