@@ -4,135 +4,240 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import datetime 
-from pandas_datareader import data as pdr
-import scipy.stats as stats
+import yfinance as yf
 from scipy.stats import norm
+import seaborn as sns
 
-#option pricing model - BlackScholes Method
-@dataclass
-class BlackScholes:
-    spot: float = 5481
-    strike: float= 4400
-    maturity = ((datetime.date(2024,11,21)-datetime.date.today()).days+1)/365 
-    risk_free_rate: float= 0.044
-    volatility: float= 0.3675
-    dividend: float= 0
-    
-    def d1(self) -> float:
-        return (np.log(self.spot / self.strike) + (self.risk_free_rate - self.dividend + self.volatility**2 / 2)
-                * self.maturity) / (self.volatility * np.sqrt(self.maturity))
-    
-    def d2(self) -> float:
-        return self.d1() - self.volatility * np.sqrt(self.maturity)
-    
-    def call_value(self) -> float:
-        call_value = self.spot * np.exp(-self.dividend * self.maturity) * norm.cdf(self.d1(), 0, 1) - \
-            self.strike * np.exp(-self.risk_free_rate * self.maturity) * norm.cdf(self.d2(), 0, 1)
-        print(f'Call Value by Black-Scholes-Merton method is ${call_value}')
-            
-    def put_value(self) -> float:
-        put_value = self.strike * np.exp(-self.risk_free_rate * self.maturity) * norm.cdf(-self.d2(), 0, 1) - \
-            self.spot * np.exp(-self.dividend * self.maturity) * norm.cdf(-self.d1(), 0, 1)
-        print(f'Put Value by Black-Scholes-Merton method is ${put_value}')
-
-# Calculation of greeks    
-    def delta_call(self) -> float:
-        return norm.cdf(self.d1(), 0, 1)
-    
-    def delta_put(self) -> float:
-        return -norm.cdf(-self.d1())
-    
-    def gamma(self) -> float:
-        return norm.pdf(self.d1()) / (self.spot * self.volatility * np.sqrt(self.maturity))
-    
-    def vega(self) -> float:
-        return self.spot * np.sqrt(self.maturity) * norm.pdf(self.d1()) * 0.01
-    
-    def rho_call(self) -> float:
-        return  - (self.spot * norm.pdf(self.d1()) * self.volatility / (2 * np.sqrt(self.maturity)) - self.risk_free_rate * self.strike * np.exp(-self.risk * self.maturity) * norm.cdf(self.d2())) / 100
-    
-    def rho_put(self) -> float:
-        return  - (self.spot * norm.pdf(self.d1()) * self.volatility / (2 * np.sqrt(self.maturity)) + self.risk_free_rate * self.strike * np.exp(-self.risk * self.maturity) * norm.cdf(self.d2())) / 100
-    
-    def theta_call(self) -> float:
-        return - (self.spot * norm.pdf(self.d1()) * self.volatility / (2* np.sqrt(self.maturity)) - self.risk_free_rate * self.strike * np.exp(-self.risk_free_rate * self.maturity) * norm.cdf(self.d2())) / 365
-    
-# Valuation of Financial Derivatives through Monte Carlo Simulations is only possible by using Risk-Neutral Pricing and simulating risk-neutral asset paths
-# In case of financial derivatives Monte Carlo is a powerful tool to price complex derivatives for which an analytical formula is not possible.    
-# Monte Carlo simulation provides an easy way to deal with multiple random factors and the incorporation of more realistic asset price processes such as jumps in asset prices
-
-# Option pricing model - Monte Carlo method
-@dataclass
-class MonteCarlo:
-    
-    S: float = 5481                                                            #stock price
-    K: float = 4400                                                            #strike price
-    vol: float = 0.3675                                                        #volatility (%)
-    r: float = 0.044                                                           #risk-free rate (%)
-    N: float = 10                                                              #number of time steps
-    M: float = 1000000                                                         #number of simulations
-    market_value: float = 1181                                                 #market price of option
-    T = ((datetime.date(2024,11,29)-datetime.date.today()).days+1)/365         #time till maturity
-    
-    # To increase the accuracy of the model we can simply increase the number of Simulations
-    # Risk Neutral pricing metodology tells us that: value of an option = risk-neutral expectation of its dicounted payoff,
-    # we can estimate this expectation by computing the average of a large number of discounted payoff for a particular simulation
+class OptionsAnalyzer:
+    def __init__(self, ticker: str):
+        self.ticker = ticker
+        self.stock = yf.Ticker(ticker)
         
-    def call_value(self) -> float:   
-        # Precompute the constants
-        dt = self.T/self.N
-        nudt = (self.r-0.5*self.vol**2) * dt
-        volsdt = self.vol * np.sqrt(dt)
-        lnS = np.log(self.S)
-    
-        # Standar Error placeholders
-        sum_CT = 0
-        sum_CT2 = 0
-    
-        for i in range(self.M):
-            lnSt = lnS
-            for j in range(self.N):
-                lnSt = lnSt + nudt + volsdt*np.random.normal()
-            
-            ST = np.exp(lnSt)
-            CT = max(0, ST - self.K)
-            sum_CT = sum_CT + CT
-            sum_CT2 = sum_CT2 + CT*CT
-            
-        C0 = np.exp(-self.r*self.T)*sum_CT/self.M
-        sigma = np.sqrt((sum_CT2 - sum_CT*sum_CT/self.M)*np.exp(-2*self.r*self.T) / (self.M - 1))
-        SE = sigma/np.sqrt(self.M)
-        print(f'Call Value using Monte-Carlo method is ${C0} with SE +/-{SE}')
+        # Get current stock price more reliably
+        try:
+            # Try to get real-time price first
+            self.spot_price = self.stock.fast_info['last_price']
+        except:
+            try:
+                # Fallback to historical data
+                self.spot_price = self.stock.history(period='1d')['Close'].iloc[-1]
+            except:
+                raise ValueError(f"Could not fetch price data for {ticker}")
                 
-    def put_value(self) -> float:   
-        # Precompute the constants
-        dt = self.T/self.N
-        nudt = (self.r-0.5*self.vol**2) * dt
-        volsdt = self.vol * np.sqrt(dt)
-        lnS = np.log(self.S)
-    
-        # Standar Error placeholders
-        sum_PT = 0
-        sum_PT2 = 0
-    
-        for i in range(self.M):
-            lnSt = lnS
-            for j in range(self.N):
-                lnSt = lnSt + nudt + volsdt*np.random.normal()
-            
-            ST = np.exp(lnSt)
-            PT = max(0, self.K - ST)
-            sum_PT = sum_PT + PT
-            sum_PT2 = sum_PT2 + PT*PT
-            
-        C0 = np.exp(-self.r*self.T)*sum_PT/self.M
-        sigma = np.sqrt((sum_PT2 - sum_PT*sum_PT/self.M)*np.exp(-2*self.r*self.T) / (self.M - 1))
-        SE = sigma/np.sqrt(self.M)
-        print(f'Put Value by Monte-Carlo method is ${C0} with SE +/-{SE}')
+        self.risk_free_rate = 0.044  
+        print(f"Successfully initialized {ticker} with spot price: ${self.spot_price:.2f}")
         
+    def calculate_greeks(self, row):
+        """Calculate Greeks for a single option"""
+        S = self.spot_price
+        K = row['strike']
+        T = row['tte']
+        r = self.risk_free_rate
+        sigma = row['impliedVolatility']
+        
+        # Handle edge cases
+        if T <= 0 or sigma <= 0:
+            return pd.Series({
+                'delta': 0,
+                'gamma': 0,
+                'theta': 0,
+                'vega': 0,
+                'rho': 0
+            })
+        
+        # Calculate d1 and d2
+        try:
+            d1 = (np.log(S/K) + (r + sigma**2/2)*T) / (sigma*np.sqrt(T))
+            d2 = d1 - sigma*np.sqrt(T)
+        except:
+            return pd.Series({
+                'delta': 0,
+                'gamma': 0,
+                'theta': 0,
+                'vega': 0,
+                'rho': 0
+            })
+        
+        # Common terms
+        nd1 = norm.pdf(d1)
+        Nd1 = norm.cdf(d1)
+        Nd2 = norm.cdf(d2)
+        
+        # Calculate Greeks
+        if row['option_type'] == 'call':
+            delta = Nd1
+            theta = (-S*nd1*sigma/(2*np.sqrt(T)) - 
+                    r*K*np.exp(-r*T)*Nd2)/365
+            rho = K*T*np.exp(-r*T)*Nd2/100
+        else:  # put
+            delta = Nd1 - 1
+            theta = (-S*nd1*sigma/(2*np.sqrt(T)) + 
+                    r*K*np.exp(-r*T)*norm.cdf(-d2))/365
+            rho = -K*T*np.exp(-r*T)*norm.cdf(-d2)/100
+            
+        gamma = nd1/(S*sigma*np.sqrt(T))
+        vega = S*np.sqrt(T)*nd1/100  # Divided by 100 to get per 1% change
+        
+        return pd.Series({
+            'delta': delta,
+            'gamma': gamma,
+            'theta': theta,
+            'vega': vega,
+            'rho': rho
+        })
+    
+    def get_options_chain(self):
+        try:
+            # Get all available expiration dates
+            expirations = self.stock.options
+            
+            if not expirations:
+                raise ValueError(f"No options data available for {self.ticker}")
+            
+            # Initialize lists to store data
+            all_options = []
+            
+            for exp in expirations:
+                try:
+                    # Get option chain for this expiration
+                    opt = self.stock.option_chain(exp)
+                    
+                    # Process calls
+                    calls = opt.calls
+                    calls['option_type'] = 'call'
+                    
+                    # Process puts
+                    puts = opt.puts
+                    puts['option_type'] = 'put'
+                    
+                    # Combine calls and puts
+                    options = pd.concat([calls, puts])
+                    
+                    # Add expiration date
+                    options['expiration'] = exp
+                    
+                    all_options.append(options)
+                except Exception as e:
+                    print(f"Warning: Could not process expiration {exp}: {str(e)}")
+                    continue
+            
+            if not all_options:
+                raise ValueError(f"Could not process any options data for {self.ticker}")
+                
+            # Combine all options data
+            options_df = pd.concat(all_options, ignore_index=True)
+            
+            # Calculate time to expiry in years
+            options_df['tte'] = options_df['expiration'].apply(
+                lambda x: (datetime.datetime.strptime(x, '%Y-%m-%d').date() - datetime.date.today()).days
+            )
+            
+            # Calculate moneyness (K/S)
+            options_df['moneyness'] = options_df['strike'] / self.spot_price
+            
+            # Calculate Greeks
+            greeks = options_df.apply(self.calculate_greeks, axis=1)
+            options_df = pd.concat([options_df, greeks], axis=1)
+            
+            return options_df
+            
+        except Exception as e:
+            raise ValueError(f"Error processing options chain: {str(e)}")
+    
+    def calculate_implied_vol_surface(self):
+        options_df = self.get_options_chain()
+        
+        # Create pivot table for the heatmap
+        vol_surface = pd.pivot_table(
+            options_df,
+            values='impliedVolatility',
+            index=pd.qcut(options_df['moneyness'], 10),  # Bucketed moneyness
+            columns=pd.qcut(options_df['tte'], 10),      # Bucketed time to expiry
+            aggfunc='mean'
+        )
+        
+        return vol_surface
+    
+    def plot_volatility_surface(self):
+        vol_surface = self.calculate_implied_vol_surface()
+        
+        plt.figure(figsize=(12, 8))
+        sns.heatmap(
+            vol_surface,
+            cmap='YlOrRd',
+            annot=True,
+            fmt='.2f',
+            cbar_kws={'label': 'Implied Volatility'}
+        )
+        
+        plt.title(f'Implied Volatility Surface for {self.ticker}')
+        plt.xlabel('Time to Expiry Buckets')
+        plt.ylabel('Moneyness (Strike/Spot) Buckets')
+        plt.tight_layout()
+        plt.show()
+    
+    def plot_greeks_surface(self, greek='delta'):
+        """Plot surface for specified Greek"""
+        options_df = self.get_options_chain()
+        
+        greek_surface = pd.pivot_table(
+            options_df,
+            values=greek,
+            index=pd.qcut(options_df['moneyness'], 10),
+            columns=pd.qcut(options_df['tte'], 10),
+            aggfunc='mean'
+        )
+        
+        plt.figure(figsize=(12, 8))
+        sns.heatmap(
+            greek_surface,
+            cmap='RdYlBu',
+            annot=True,
+            fmt='.3f',
+            cbar_kws={'label': greek.capitalize()}
+        )
+        
+        plt.title(f'{greek.capitalize()} Surface for {self.ticker}')
+        plt.xlabel('Time to Expiry Buckets')
+        plt.ylabel('Moneyness (Strike/Spot) Buckets')
+        plt.tight_layout()
+        plt.show()
+        
+    def summarize_options(self):
+        options_df = self.get_options_chain()
+        
+        print(f"\nOptions Analysis Summary for {self.ticker}")
+        print(f"Current Stock Price: ${self.spot_price:.2f}")
+        print(f"\nTotal number of options: {len(options_df)}")
+        print(f"Number of expiration dates: {len(options_df['expiration'].unique())}")
+        
+        print("\nImplied Volatility Summary:")
+        print(options_df['impliedVolatility'].describe())
+        
+        print("\nGreeks Summary (Mean Values):")
+        for greek in ['delta', 'gamma', 'theta', 'vega', 'rho']:
+            print(f"{greek.capitalize()}: {options_df[greek].mean():.4f}")
+        
+        # Analysis by moneyness
+        print("\nAverage Implied Volatility by Moneyness:")
+        moneyness_bins = pd.qcut(options_df['moneyness'], 5)
+        print(options_df.groupby(moneyness_bins)['impliedVolatility'].mean())
 
-Monte_Carlo_test = MonteCarlo()
-print(Monte_Carlo_test.call_value())
+def analyze_options(ticker: str):
+    try:
+        analyzer = OptionsAnalyzer(ticker)
+        analyzer.summarize_options()
+        analyzer.plot_volatility_surface()
+        
+        # Plot surfaces for each Greek
+        for greek in ['delta', 'gamma', 'theta', 'vega', 'rho']:
+            analyzer.plot_greeks_surface(greek)
+            
+    except Exception as e:
+        print(f"Error analyzing {ticker}: {str(e)}")
+        raise
 
-Black_Scholes_test = BlackScholes()
-print(Black_Scholes_test.call_value())
+# Run analysis
+if __name__ == "__main__":
+    analyze_options("AAPL")  # Replace with your desired ticker
+
